@@ -32,6 +32,23 @@
 - Added "Request ID" to user message for variation
 - Increased temperature from 0.7 to 0.9 for more creative responses
 
+### 3. Platform-Specific Content Length ✅ NEW!
+**Problem**: AI was generating short content regardless of platform requirements
+
+**Root Cause**: No platform-specific guidelines in prompts
+
+**Solution**:
+- Added `platformGuidelines` object with specs for each platform:
+  - **Instagram**: 150-300 words, 20-30 hashtags, 1200 tokens
+  - **YouTube**: 300-500 words, 10-15 hashtags, 1500 tokens
+  - **LinkedIn**: 200-400 words, 5-10 hashtags, 1300 tokens
+  - **Twitter**: 200-280 characters, 2-5 hashtags, 800 tokens
+- Dynamic max_tokens based on platform
+- Platform-specific style guidelines (visual, professional, brief, etc.)
+- Detailed prompts with exact length requirements
+
+**Files Modified**: `ai-content-planner.jsx` (lines ~1490-1560)
+
 ## Files Modified
 
 ### `server/server.js`
@@ -42,7 +59,12 @@
 ### `ai-content-planner.jsx`
 - Enhanced `generateTitlesWithAI()` with timestamp and random seed
 - Updated prompts to request unique/diverse content
-- Added control character sanitization in `simulateGenerate()`
+- Added two-stage JSON parsing with error recovery in `simulateGenerate()`
+- Added platform-specific content guidelines (Instagram, YouTube, LinkedIn, Twitter)
+- Dynamic max_tokens and detailed prompts based on platform
+
+### New Files
+- `PLATFORM-CONTENT-GUIDELINES.md` - Complete reference for platform-specific content requirements
 
 ## Testing Checklist
 
@@ -50,6 +72,10 @@
 - [ ] Generate post content - should not have JSON parsing errors
 - [ ] Try multiple posts in sequence - all should work
 - [ ] Verify content is unique and varied
+- [ ] Test Instagram posts - should be 150-300 words with 20-30 hashtags
+- [ ] Test YouTube posts - should be 300-500 words with 10-15 hashtags
+- [ ] Test LinkedIn posts - should be 200-400 words with 5-10 hashtags
+- [ ] Test Twitter posts - should be 200-280 characters with 2-5 hashtags
 
 ## Next Steps
 

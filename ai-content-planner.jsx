@@ -1490,6 +1490,40 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
     updatePost(post.id, { status: "confirmed" });
     await new Promise(r => setTimeout(r, 1500));
 
+    // Platform-specific content guidelines
+    const platformGuidelines = {
+      instagram: {
+        captionLength: "150-300 words (2200 characters max)",
+        hookLength: "1-2 punchy lines",
+        hashtagCount: "20-30 hashtags",
+        style: "Visual storytelling, emojis encouraged, conversational",
+        maxTokens: 1200
+      },
+      youtube: {
+        captionLength: "300-500 words (detailed description)",
+        hookLength: "Compelling 2-3 line intro",
+        hashtagCount: "10-15 hashtags",
+        style: "Detailed, informative, include timestamps if relevant",
+        maxTokens: 1500
+      },
+      linkedin: {
+        captionLength: "200-400 words (professional but engaging)",
+        hookLength: "Strong professional hook (2-3 lines)",
+        hashtagCount: "5-10 relevant hashtags",
+        style: "Professional insights, data-driven, thought leadership",
+        maxTokens: 1300
+      },
+      twitter: {
+        captionLength: "200-280 characters (concise and punchy)",
+        hookLength: "First 100 characters must grab attention",
+        hashtagCount: "2-5 hashtags max",
+        style: "Brief, witty, thread-worthy if needed",
+        maxTokens: 800
+      }
+    };
+
+    const guidelines = platformGuidelines[plan.platform.toLowerCase()] || platformGuidelines.instagram;
+
     // Call Claude API via backend proxy
     let generatedPost;
     try {
@@ -1500,9 +1534,29 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
         },
         body: JSON.stringify({
           model: CLAUDE_MODEL,
-          max_tokens: 1000,
-          system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note. Language: ${plan.language}. Tone: ${plan.tone}. Niche: ${plan.niche}. Rules: hook is 1-2 lines that stop the scroll. caption is the full post body (use \\n for line breaks, NOT actual newlines). hashtags is 15-20 space-separated hashtags. cta is a warm call-to-action. platform_note is one practical posting tip. CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON that can be parsed by JSON.parse().`,
-          messages: [{ role: "user", content: `Create a complete post for this title: "${post.title}". Platform: ${plan.platform}, Niche: ${plan.niche}, Tone: ${plan.tone}, Language: ${plan.language}` }]
+          max_tokens: guidelines.maxTokens,
+          system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note.
+
+PLATFORM: ${plan.platform}
+LANGUAGE: ${plan.language}
+TONE: ${plan.tone}
+NICHE: ${plan.niche}
+
+PLATFORM-SPECIFIC REQUIREMENTS:
+- Caption Length: ${guidelines.captionLength}
+- Hook Style: ${guidelines.hookLength}
+- Hashtags: ${guidelines.hashtagCount}
+- Content Style: ${guidelines.style}
+
+RULES:
+1. hook: ${guidelines.hookLength} that stops the scroll
+2. caption: Full post body at ${guidelines.captionLength}. Use \\n for line breaks (NOT actual newlines). ${plan.language === "hinglish" ? "Use natural Hinglish as Indian creators do." : ""}
+3. hashtags: ${guidelines.hashtagCount}, space-separated, MUST include # symbol before each tag (e.g., "#ContentCreator #IndianCreators #Viral")
+4. cta: Warm, platform-appropriate call-to-action
+5. platform_note: One practical ${plan.platform} posting tip
+
+CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON that can be parsed by JSON.parse().`,
+          messages: [{ role: "user", content: `Create a complete ${plan.platform} post for this title: "${post.title}". Make it ${guidelines.captionLength} with ${plan.tone} tone in ${plan.language}. Niche: ${plan.niche}` }]
         })
       });
 
