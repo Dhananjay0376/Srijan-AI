@@ -741,6 +741,41 @@ function getSampleTitles(niche, count) {
   for (let i = 0; i < count; i++) result.push(titles[i % titles.length]);
   return result;
 }
+
+function countWords(text) {
+  return (text || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+function getCaptionMinimum(platform) {
+  const normalized = (platform || "").toLowerCase();
+  if (normalized === "instagram") return { type: "words", min: 150 };
+  if (normalized === "youtube") return { type: "words", min: 300 };
+  if (normalized === "linkedin") return { type: "words", min: 200 };
+  if (normalized === "twitter") return { type: "chars", min: 200 };
+  return { type: "words", min: 150 };
+}
+
+function validateCaptionLength(platform, caption) {
+  const rule = getCaptionMinimum(platform);
+  if (rule.type === "chars") {
+    const length = (caption || "").trim().length;
+    return {
+      valid: length >= rule.min,
+      actual: length,
+      unit: "characters",
+      min: rule.min
+    };
+  }
+
+  const length = countWords(caption);
+  return {
+    valid: length >= rule.min,
+    actual: length,
+    unit: "words",
+    min: rule.min
+  };
+}
+
 async function generateTitlesWithAI(niche, count, platform, language, tone) {
   try {
     // Add timestamp and random seed for variation
@@ -1539,18 +1574,51 @@ function CalendarPage({ plan, onBack, onUpdate, addToast }) {
 
     const guidelines = platformGuidelines[plan.platform.toLowerCase()] || platformGuidelines.instagram;
 
-    // Call Claude API via backend proxy
-    let generatedPost;
-    try {
-      const response = await fetch(BACKEND_API_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: CLAUDE_MODEL,
-          max_tokens: guidelines.maxTokens,
-          system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note.
+    const parseGeneratedPost = (text) => {
+      if (!text) {
+        throw new Error("Empty response from API");
+      }
+
+      let clean = text.replace(/```json|```/g, "").trim();
+      let parsed;
+
+      try {
+        parsed = JSON.parse(clean);
+      } catch (firstError) {
+        console.log("First parse failed, attempting to fix JSON...");
+        clean = clean
+          .replace(/\r\n/g, "\\n")
+          .replace(/\n/g, "\\n")
+          .replace(/\r/g, "\\r")
+          .replace(/\t/g, "\\t")
+          .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, "");
+
+        try {
+          parsed = JSON.parse(clean);
+        } catch (secondError) {
+          console.error("JSON parse failed even after cleanup:", clean.substring(0, 500));
+          throw new Error(`JSON parsing failed: ${secondError.message}`);
+        }
+      }
+
+      const requiredFields = ["hook", "caption", "hashtags", "cta", "platform_note"];
+      const missingFields = requiredFields.filter(field => !parsed[field]);
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+      }
+
+      const captionCheck = validateCaptionLength(plan.platform, parsed.caption);
+      if (!captionCheck.valid) {
+        throw new Error(`Caption too short: ${captionCheck.actual} ${captionCheck.unit}, expected at least ${captionCheck.min}`);
+      }
+
+      return parsed;
+    };
+
+    const buildPrompt = (strictLength = false) => ({
+      model: CLAUDE_MODEL,
+      max_tokens: guidelines.maxTokens,
+      system: `You are an expert content creator for Indian ${plan.platform} creators. Return ONLY valid JSON with these exact keys: hook, caption, hashtags, cta, platform_note.
 
 PLATFORM: ${plan.platform}
 LANGUAGE: ${plan.language}
@@ -1569,64 +1637,49 @@ RULES:
 3. hashtags: ${guidelines.hashtagCount}, space-separated, MUST include # symbol before each tag (e.g., "#ContentCreator #IndianCreators #Viral")
 4. cta: Warm, platform-appropriate call-to-action
 5. platform_note: One practical ${plan.platform} posting tip
+${strictLength ? `6. LENGTH COMPLIANCE IS MANDATORY: if the caption is shorter than the required minimum for ${plan.platform}, your answer is invalid. Expand the caption with more substance, examples, and detail before returning.` : ""}
 
 CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON that can be parsed by JSON.parse().`,
-          messages: [{ role: "user", content: `Create a complete ${plan.platform} post for this title: "${post.title}". Make it ${guidelines.captionLength} with ${plan.tone} tone in ${plan.language}. Niche: ${plan.niche}` }]
-        })
-      });
+      messages: [{
+        role: "user",
+        content: `Create a complete ${plan.platform} post for this title: "${post.title}". Make it ${guidelines.captionLength} with ${plan.tone} tone in ${plan.language}. Niche: ${plan.niche}.${strictLength ? " Do not return a short caption. Add enough detail to fully satisfy the minimum platform length requirement." : ""}`
+      }]
+    });
 
-      if (!response.ok) {
-        let details = `API error: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          details = errorData.message || errorData.error || details;
-        } catch {}
-        throw new Error(details);
-      }
+    // Call Claude API via backend proxy
+    let generatedPost;
+    try {
+      const fetchGeneratedPost = async (strictLength = false) => {
+        const response = await fetch(BACKEND_API_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(buildPrompt(strictLength))
+        });
 
-      const data = await response.json();
-      const text = data.content?.[0]?.text || "";
-      
-      if (!text) {
-        throw new Error("Empty response from API");
-      }
-
-      // Remove markdown code blocks
-      let clean = text.replace(/```json|```/g, "").trim();
-      
-      // Try to parse as-is first
-      let parsed;
-      try {
-        parsed = JSON.parse(clean);
-      } catch (firstError) {
-        // If parsing fails, try to fix common issues
-        console.log('First parse failed, attempting to fix JSON...');
-        
-        // Replace literal newlines, tabs, and control chars in the entire string
-        clean = clean
-          .replace(/\r\n/g, '\\n')  // Windows line endings
-          .replace(/\n/g, '\\n')     // Unix line endings
-          .replace(/\r/g, '\\r')     // Mac line endings
-          .replace(/\t/g, '\\t')     // Tabs
-          .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, ''); // Other control chars
-        
-        try {
-          parsed = JSON.parse(clean);
-        } catch (secondError) {
-          console.error('JSON parse failed even after cleanup:', clean.substring(0, 500));
-          throw new Error(`JSON parsing failed: ${secondError.message}`);
+        if (!response.ok) {
+          let details = `API error: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            details = errorData.message || errorData.error || details;
+          } catch {}
+          throw new Error(details);
         }
-      }
-      
-      // Validate required fields
-      const requiredFields = ["hook", "caption", "hashtags", "cta", "platform_note"];
-      const missingFields = requiredFields.filter(field => !parsed[field]);
-      
-      if (missingFields.length > 0) {
-        throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
-      }
 
-      generatedPost = parsed;
+        const data = await response.json();
+        return parseGeneratedPost(data.content?.[0]?.text || "");
+      };
+
+      try {
+        generatedPost = await fetchGeneratedPost(false);
+      } catch (error) {
+        if (!String(error.message || "").includes("Caption too short")) {
+          throw error;
+        }
+        console.warn("Caption too short on first attempt, retrying with stricter length instruction.");
+        generatedPost = await fetchGeneratedPost(true);
+      }
     } catch (error) {
       console.error("AI generation failed:", error.message);
       // Fallback to demo data
