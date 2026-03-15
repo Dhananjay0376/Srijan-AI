@@ -31,6 +31,27 @@ function getDefaultMonthString() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function formatMonthLabel(monthString) {
+  if (!monthString) return "";
+  const [year, month] = String(monthString).split("-").map(Number);
+  if (!year || !month) return monthString;
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatPlanPostDate(monthString, day) {
+  if (!monthString || !day) return "";
+  const [year, month] = String(monthString).split("-").map(Number);
+  if (!year || !month) return `${monthString}-${String(day).padStart(2, "0")}`;
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 async function requestAI({ system, messages, max_tokens, model = CLAUDE_MODEL }) {
   const response = await fetch(BACKEND_API_ENDPOINT, {
     method: "POST",
@@ -1680,7 +1701,7 @@ function CreatePlanPage({ onBack, onCreate, user, plans, memories, continuationS
           </div>
 
           {/* Mini calendar preview */}
-          <label style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "var(--accent-gold)", textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 14 }}>PREVIEW — AUGUST 2025</label>
+          <label style={{ fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "var(--accent-gold)", textTransform: "uppercase", letterSpacing: "0.1em", display: "block", marginBottom: 14 }}>PREVIEW — {formatMonthLabel(form.month)}</label>
           <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 20, marginBottom: 28 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
               {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
@@ -1921,7 +1942,7 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
           <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 500 }}>
             {plan.niche.charAt(0).toUpperCase() + plan.niche.slice(1)} · {plan.platform.charAt(0).toUpperCase() + plan.platform.slice(1)} · {plan.language.charAt(0).toUpperCase() + plan.language.slice(1)}
           </h1>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>August 2025</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>{formatMonthLabel(plan.month)}</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={() => onDeletePlan(plan)}>
@@ -2015,14 +2036,14 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
 
       {/* Post Detail Modal */}
       {selectedPost && selectedPost.generatedPost && (
-        <PostDetailModal post={selectedPost} onClose={() => setSelectedPost(null)} onRegenerate={() => { setSelectedPost(null); simulateGenerate(selectedPost); }} addToast={addToast} />
+        <PostDetailModal post={selectedPost} planMonth={plan.month} onClose={() => setSelectedPost(null)} onRegenerate={() => { setSelectedPost(null); simulateGenerate(selectedPost); }} addToast={addToast} />
       )}
     </div>
   );
 }
 
 // POST DETAIL MODAL
-function PostDetailModal({ post, onClose, onRegenerate, addToast }) {
+function PostDetailModal({ post, planMonth, onClose, onRegenerate, addToast }) {
   const gp = post.generatedPost;
   const tags = gp.hashtags.split(" ").filter(Boolean);
 
@@ -2043,7 +2064,7 @@ function PostDetailModal({ post, onClose, onRegenerate, addToast }) {
             </h2>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <span className="badge badge-generated">Generated</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-muted)" }}>Aug {post.day}, 2025</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-muted)" }}>{formatPlanPostDate(planMonth, post.day)}</span>
             </div>
           </div>
           <button onClick={onClose} style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border)", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", color: "var(--text-muted)", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
