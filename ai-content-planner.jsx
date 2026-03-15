@@ -63,6 +63,19 @@ function formatCreatedAt(value) {
   });
 }
 
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 async function requestAI({ system, messages, max_tokens, model = CLAUDE_MODEL }) {
   const response = await fetch(BACKEND_API_ENDPOINT, {
     method: "POST",
@@ -1936,7 +1949,15 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
       generatedPost = DEMO_POSTS[key] || DEMO_POSTS.exam_instagram_hinglish;
     }
 
-    updatePost(post.id, { status: "generated", generatedPost });
+    const generatedAt = new Date().toISOString();
+    updatePost(post.id, {
+      status: "generated",
+      generatedAt,
+      generatedPost: {
+        ...generatedPost,
+        generatedAt,
+      }
+    });
     setGenerating(null);
     addToast(`"${post.title.slice(0, 30)}…" is ready! 🎉`, "success");
   };
@@ -2058,6 +2079,7 @@ CRITICAL: Use \\n for line breaks, not actual newlines. Return ONLY valid JSON t
 function PostDetailModal({ post, planMonth, onClose, onRegenerate, addToast }) {
   const gp = post.generatedPost;
   const tags = gp.hashtags.split(" ").filter(Boolean);
+  const generatedLabel = formatDateTime(post.generatedAt || gp.generatedAt);
 
   const copyAll = () => {
     const text = `${gp.hook}\n\n${gp.caption}\n\n${gp.hashtags}\n\n${gp.cta}`;
@@ -2076,7 +2098,9 @@ function PostDetailModal({ post, planMonth, onClose, onRegenerate, addToast }) {
             </h2>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <span className="badge badge-generated">Generated</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-muted)" }}>{formatPlanPostDate(planMonth, post.day)}</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "var(--text-muted)" }}>
+                {generatedLabel || formatPlanPostDate(planMonth, post.day)}
+              </span>
             </div>
           </div>
           <button onClick={onClose} style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border)", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", color: "var(--text-muted)", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
