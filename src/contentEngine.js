@@ -92,6 +92,14 @@ function makeMemoryKey(creatorId, platform) {
   return `${creatorId}::${platform}`;
 }
 
+function makeSeriesId(creatorId, platform, niche) {
+  return `series-${slugify(creatorId)}-${platform}-${slugify(niche)}`;
+}
+
+function makeSeriesName(niche) {
+  return `${niche} Content Series`;
+}
+
 function planItems(plan) {
   return plan?.content_items || plan?.posts || [];
 }
@@ -103,6 +111,13 @@ function approvedItems(plan) {
 function getPlatformHistory(plans, creatorId, platform) {
   return [...(plans || [])]
     .filter((plan) => plan.creator_id === creatorId && plan.platform === platform)
+    .sort((a, b) => String(a.month).localeCompare(String(b.month)));
+}
+
+function getSeriesHistory(plans, creatorId, platform, niche) {
+  const seriesId = makeSeriesId(creatorId, platform, niche);
+  return [...(plans || [])]
+    .filter((plan) => (plan.series_id || makeSeriesId(plan.creator_id, plan.platform, plan.niche)) === seriesId)
     .sort((a, b) => String(a.month).localeCompare(String(b.month)));
 }
 
@@ -483,6 +498,8 @@ function buildInitialMemory(creatorId, platform, creatorBrief) {
   return {
     creator_id: creatorId,
     platform,
+    series_id: makeSeriesId(creatorId, platform, brief.niche),
+    series_name: makeSeriesName(brief.niche),
     content_pillars: brief.content_pillars,
     used_titles: [],
     used_hooks: [],
@@ -530,6 +547,7 @@ async function generatePlan({
 }) {
   const brief = coerceCreatorBrief(creatorBrief);
   const history = getPlatformHistory(plans, creatorId, platform);
+  const seriesHistory = getSeriesHistory(plans, creatorId, platform, brief.niche);
   const memoryKey = makeMemoryKey(creatorId, platform);
   const existingMemory = memories[memoryKey] || buildInitialMemory(creatorId, platform, brief);
   const memory = rebuildMemoryFromPlans({ ...existingMemory, posting_cadence: brief.posting_cadence }, history);
@@ -631,11 +649,17 @@ async function generatePlan({
 
   const previousTheme = history[history.length - 1]?.month_theme || null;
   const continuityFromPlanId = history[history.length - 1]?.plan_id || null;
+  const seriesId = makeSeriesId(creatorId, platform, brief.niche);
+  const seriesName = makeSeriesName(brief.niche);
+  const seriesSequenceNumber = seriesHistory.length + 1;
   const plan = {
     id: `plan-${Date.now()}`,
     plan_id: `plan-${Date.now()}`,
     creator_id: creatorId,
     platform,
+    series_id: seriesId,
+    series_name: seriesName,
+    series_sequence_number: seriesSequenceNumber,
     niche: brief.niche,
     language: brief.language,
     tone: brief.tone,
@@ -667,6 +691,8 @@ async function generatePlan({
     tone_profile: brief.tone_profile,
     audience_profile: brief.audience_profile,
     content_pillars: brief.content_pillars,
+    series_id: seriesId,
+    series_name: seriesName,
     current_month_theme: plan.month_theme,
     continuity_summary: plan.continuity_summary,
     campaign_arc: plan.campaign_arc,

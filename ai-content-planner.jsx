@@ -1262,7 +1262,7 @@ function DashboardPage({ user, plans, onNewPlan, onViewCalendar, onDeletePlan, o
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-          {plans.map(p => <PlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} onDelete={() => onDeletePlan(p)} onContinue={() => onContinuePlan(p)} />)}
+          {plans.map(p => <SeriesPlanCard key={p.id} plan={p} onView={() => onViewCalendar(p)} onDelete={() => onDeletePlan(p)} onContinue={() => onContinuePlan(p)} />)}
         </div>
       )}
 
@@ -1318,6 +1318,52 @@ function PlanCard({ plan, onView, onDelete, onContinue }) {
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn-ghost btn-sm" style={{ flex: 1 }} onClick={onView}>View Calendar →</button>
+        <button className="btn-ghost btn-sm" style={{ color: "var(--accent-gold)", borderColor: "rgba(200,147,74,0.25)" }} onClick={onContinue}>Continue</button>
+        <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={onDelete}>Delete</button>
+      </div>
+    </div>
+  );
+}
+
+function SeriesPlanCard({ plan, onView, onDelete, onContinue }) {
+  const items = plan.content_items || plan.posts || [];
+  const generated = items.filter(p => p.status === "generated").length;
+  const total = items.length;
+  const pct = total > 0 ? (generated / total) * 100 : 0;
+  const next = items.find(p => p.status === "pending" || p.status === "confirmed");
+  const nColor = NICHE_COLORS[plan.niche] || "var(--accent-gold)";
+
+  return (
+    <div className="card" style={{ padding: 24, animation: "fadeUp 0.4s ease" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+        <div>
+          <span style={{ background: `${nColor}22`, color: nColor, border: `1px solid ${nColor}44`, borderRadius: 6, padding: "2px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase" }}>{plan.niche}</span>
+        </div>
+        <span style={{ fontSize: 20 }}>{PLATFORMS.find(p => p.id === plan.platform)?.icon || "📱"}</span>
+      </div>
+      <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 500, marginBottom: 6 }}>
+        {plan.series_name || `${plan.niche.charAt(0).toUpperCase() + plan.niche.slice(1)} Content Series`}
+      </h3>
+      <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
+        Month {plan.series_sequence_number || 1} · {plan.month}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
+        {plan.language} · {plan.tone} · {total} posts
+      </div>
+      {plan.month_theme && (
+        <div style={{ fontSize: 12, color: "var(--accent-gold)", lineHeight: 1.5, marginBottom: 12 }}>
+          {plan.month_theme}
+        </div>
+      )}
+      <div className="progress-bar" style={{ marginBottom: 8 }}>
+        <div className="progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
+        <span>{generated}/{total} generated</span>
+        {next && <span>Next: {plan.month}-{String(next.day).padStart(2, "0")}</span>}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button className="btn-ghost btn-sm" style={{ flex: 1 }} onClick={onView}>View Calendar</button>
         <button className="btn-ghost btn-sm" style={{ color: "var(--accent-gold)", borderColor: "rgba(200,147,74,0.25)" }} onClick={onContinue}>Continue</button>
         <button className="btn-ghost btn-sm" style={{ color: "#E07A7A", borderColor: "rgba(224,122,122,0.25)" }} onClick={onDelete}>Delete</button>
       </div>
@@ -1434,6 +1480,9 @@ function CreatePlanPage({ onBack, onCreate, user, plans, memories, continuationS
         plan_id: `plan-${Date.now()}`,
         creator_id: user.email,
         platform: form.platform,
+        series_id: platformMemory?.series_id || `series-${user.email.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${form.platform}-${displayNiche.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        series_name: platformMemory?.series_name || `${displayNiche} Content Series`,
+        series_sequence_number: (platformHistory.filter(plan => (plan.niche || "").toLowerCase() === displayNiche.toLowerCase()).length || 0) + 1,
         niche: displayNiche,
         language: form.language,
         tone: form.tone,
