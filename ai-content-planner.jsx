@@ -52,6 +52,17 @@ function formatPlanPostDate(monthString, day) {
   });
 }
 
+function formatCreatedAt(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 async function requestAI({ system, messages, max_tokens, model = CLAUDE_MODEL }) {
   const response = await fetch(BACKEND_API_ENDPOINT, {
     method: "POST",
@@ -1353,6 +1364,7 @@ function SeriesPlanCard({ plan, onView, onDelete, onContinue }) {
   const pct = total > 0 ? (generated / total) * 100 : 0;
   const next = items.find(p => p.status === "pending" || p.status === "confirmed");
   const nColor = NICHE_COLORS[plan.niche] || "var(--accent-gold)";
+  const createdLabel = formatCreatedAt(plan.createdAt);
 
   return (
     <div className="card" style={{ padding: 24, animation: "fadeUp 0.4s ease" }}>
@@ -1366,10 +1378,10 @@ function SeriesPlanCard({ plan, onView, onDelete, onContinue }) {
         {plan.series_name || `${plan.niche.charAt(0).toUpperCase() + plan.niche.slice(1)} Content Series`}
       </h3>
       <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
-        Month {plan.series_sequence_number || 1} · {plan.month}
+        Month {plan.series_sequence_number || 1} · {formatMonthLabel(plan.month)}
       </div>
       <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
-        {plan.language} · {plan.tone} · {total} posts
+        {createdLabel ? `Created on ${createdLabel} · ` : ""}{plan.language} · {plan.tone} · {total} posts
       </div>
       {plan.month_theme && (
         <div style={{ fontSize: 12, color: "var(--accent-gold)", lineHeight: 1.5, marginBottom: 12 }}>
@@ -1381,7 +1393,7 @@ function SeriesPlanCard({ plan, onView, onDelete, onContinue }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
         <span>{generated}/{total} generated</span>
-        {next && <span>Next: {plan.month}-{String(next.day).padStart(2, "0")}</span>}
+        {next && <span>Next post: {formatPlanPostDate(plan.month, next.day)}</span>}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <button className="btn-ghost btn-sm" style={{ flex: 1 }} onClick={onView}>View Calendar</button>
